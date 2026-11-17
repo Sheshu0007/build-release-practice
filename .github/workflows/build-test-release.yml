@@ -1,0 +1,98 @@
+name: Build Test and Release Practice
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-test-release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Ubuntu GCC Debug
+            os: ubuntu-22.04
+            compiler: g++
+            config: Debug
+          - label: Ubuntu GCC Release
+            os: ubuntu-22.04
+            compiler: g++
+            config: Release
+          - label: Ubuntu Clang Debug
+            os: ubuntu-22.04
+            compiler: clang++
+            config: Debug
+          - label: Windows MSVC Debug
+            os: windows-2022
+            compiler: msvc
+            config: Debug
+          - label: Windows MSVC Release
+            os: windows-2022
+            compiler: msvc
+            config: Release
+          - label: macOS Clang Release
+            os: macos-14
+            compiler: clang++
+            config: Release
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show tool versions
+        shell: bash
+        run: |
+          git --version
+          cmake --version
+          if [ "${{ matrix.compiler }}" = "msvc" ]; then
+            echo "MSVC is provided by the Windows runner."
+          else
+            ${{ matrix.compiler }} --version
+          fi
+
+      - name: Configure with MSVC
+        if: matrix.compiler == 'msvc'
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.config }}
+
+      - name: Configure with GCC or Clang
+        if: matrix.compiler != 'msvc'
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.config }} --parallel
+
+      - name: Run tests
+        run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure
+
+      - name: Upload CMake cache on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmake-cache-${{ matrix.os }}-${{ matrix.compiler }}-${{ matrix.config }}
+          path: build/CMakeCache.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+  pipeline-summary:
+    name: Pipeline summary
+    runs-on: ubuntu-22.04
+    needs: [ build-test ]
+    if: always()
+    steps:
+      - name: Report matrix result
+        run: |
+          echo "Build/test matrix result: ${{ needs.build-test.result }}"
+          test "${{ needs.build-test.result }}" = "success"
