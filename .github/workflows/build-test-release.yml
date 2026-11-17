@@ -42,7 +42,7 @@ jobs:
             compiler: msvc
             config: Release
           - label: macOS Clang Release
-            os: macos-14
+            os: macos-15
             compiler: clang++
             config: Release
 
