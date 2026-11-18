@@ -19,5 +19,4 @@ For each failure, record:
 6. Whether it reproduces locally.
 7. Fix commit and rerun result.
 
-Do not rely only on the final red X. Read the earliest meaningful error in the
-failed step. Never place secrets or tokens in source files or workflow logs.
+
